@@ -8,6 +8,7 @@ let stream, session, rafId, cameraRafId, renderer, scene, camera, controls, tran
 let running = false, lastInference = 0, frames = 0, fpsSince = performance.now();
 let mirrorVideo = false, useCanvasCamera = false, lastCameraFrame = 0;
 let selectedObject, modelInput, selectedObjectKind;
+let orientationTracking = false, orientationHandler, orientationCalibration;
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const inputSize = 640;
 const chairTransformStorageKey = 'webar.sample-chair.transform.v1';
@@ -46,8 +47,9 @@ function initThree() {
   scene.add(new THREE.HemisphereLight(0xe8fbff,0x23313b,3)); const key=new THREE.DirectionalLight(0x48e5c2,5); key.position.set(2,3,4); scene.add(key);
   controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.enablePan=false; controls.minDistance=1.3; controls.maxDistance=6;
   transformControls=new TransformControls(camera,renderer.domElement);transformControls.setMode('translate');transformControls.setSize(.8);transformControls.addEventListener('dragging-changed',event=>{controls.enabled=!event.value;});transformControls.addEventListener('objectChange',saveSelectedObjectTransform);transformHelper=transformControls.getHelper();transformHelper.visible=false;scene.add(transformHelper);
-  renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
+  renderer.setAnimationLoop(()=>{if(!orientationTracking)controls.update();renderer.render(scene,camera);});
   renderer.domElement.addEventListener('pointerdown', placeSelectedObject);
+  document.querySelector('#spatial-tracking-button')?.addEventListener('click',enableOrientationTracking);
   createModelInput();
   if(navigator.xr) document.body.appendChild(ARButton.createButton(renderer,{optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}})); addEventListener('resize',resize);
 }
@@ -107,6 +109,29 @@ function removeSelectedObject(){
 
 export function setTransformMode(mode){if(mode!=='translate'&&mode!=='rotate')return;transformControls?.setMode(mode);if(transformHelper&&selectedObject?.visible)transformHelper.visible=true;}
 
+async function enableOrientationTracking(){
+  const status=document.querySelector('#status-text'),button=document.querySelector('#spatial-tracking-button');
+  try{
+    if(typeof DeviceOrientationEvent==='undefined')throw new Error('capteurs d’orientation indisponibles');
+    if(typeof DeviceOrientationEvent.requestPermission==='function'){
+      const permission=await DeviceOrientationEvent.requestPermission();if(permission!=='granted')throw new Error('autorisation des capteurs refusée');
+    }
+    if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);
+    orientationCalibration=null;orientationHandler=updateCameraOrientation;addEventListener('deviceorientation',orientationHandler,true);orientationTracking=true;controls.enabled=false;
+    if(button){button.textContent='Suivi spatial actif';button.classList.add('active');}
+    status.textContent='Suivi spatial actif · la chaise reste orientée dans la scène lorsque vous tournez le téléphone.';
+  }catch(error){console.warn('Suivi spatial:',error);status.textContent=`Suivi spatial indisponible (${error.message}).`;}
+}
+
+function updateCameraOrientation(event){
+  if(event.alpha==null||event.beta==null||event.gamma==null||renderer?.xr?.isPresenting)return;
+  const deg=THREE.MathUtils.DEG2RAD,euler=new THREE.Euler(THREE.MathUtils.degToRad(event.beta),THREE.MathUtils.degToRad(event.alpha),-THREE.MathUtils.degToRad(event.gamma),'YXZ');
+  const raw=new THREE.Quaternion().setFromEuler(euler).multiply(new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5)));
+  const screenAngle=(screen.orientation?.angle??window.orientation??0)*deg;raw.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),-screenAngle));
+  if(!orientationCalibration)orientationCalibration=camera.quaternion.clone().multiply(raw.clone().invert());
+  camera.quaternion.copy(orientationCalibration).multiply(raw);
+}
+
 async function loop(confidence) {
   if(!running)return; const now=performance.now(); frames++; if(now-fpsSince>1000){document.querySelector('#fps-badge').textContent=`${frames} FPS`;frames=0;fpsSince=now;}
   if(session&&detectionEnabled&&now-lastInference>180){lastInference=now;try{await detect(confidence);}catch(error){console.error('Inference YOLO:',error);}}
@@ -136,4 +161,4 @@ function drawDetections(boxes,video){
 }
 function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
 export function setDetectionEnabled(value){detectionEnabled=value;if(!value){const c=document.querySelector('#detection-layer');c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}
-export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
+export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);document.querySelector('#spatial-tracking-button')?.removeEventListener('click',enableOrientationTracking);if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);orientationHandler=null;orientationTracking=false;transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
