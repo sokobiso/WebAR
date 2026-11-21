@@ -23,6 +23,17 @@
 .category-score { color: #8ff7df; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .category-actions { display: flex; gap: .4rem; margin-top: .6rem; }
 .category-actions button { flex: 1; padding: .5rem; color: #dce8f2; border: 1px solid #ffffff25; border-radius: .55rem; background: #17232e; font-size: .72rem; cursor: pointer; }
+.navigation-panel { display: none; position: absolute; z-index: 8; top: 18%; left: 1rem; width: min(360px, 38vw); padding: .75rem; border: 1px solid #ffffff25; border-radius: 1rem; color: #f7fbff; background: #071018ee; box-shadow: 0 14px 50px #0009; }
+.navigation-panel.active { display: block; }
+.navigation-header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.navigation-header button { width: 2rem; height: 2rem; color: #fff; border: 0; border-radius: 50%; background: #ffffff18; cursor: pointer; }
+.navigation-panel p { margin: .35rem 0 .65rem; color: #a9bac8; font-size: .78rem; }
+#navigation-map { height: 260px; border-radius: .7rem; overflow: hidden; }
+.navigation-guidance { position: absolute; z-index: 7; top: 18%; left: 50%; display: flex; align-items: center; gap: .8rem; width: min(88%, 430px); padding: .8rem 1rem; transform: translateX(-50%); border: 1px solid #48e5c266; border-radius: 1rem; background: #071018df; box-shadow: 0 12px 40px #0008; backdrop-filter: blur(14px); }
+.navigation-guidance[hidden] { display: none; }
+.navigation-guidance strong, .navigation-guidance span { display: block; }
+.navigation-guidance span { margin-top: .2rem; color: #9ff4df; font-size: .8rem; }
+.navigation-arrow { flex: 0 0 auto; width: 3.1rem; height: 3.1rem; color: #03110e; border-radius: 50%; background: #48e5c2; font-size: 2.5rem; line-height: 3rem; text-align: center; transition: transform .25s linear; }
 #ARButton { z-index: 5 !important; bottom: 154px !important; } #blazor-error-ui { position: fixed; z-index: 20; bottom: 0; display: none; width: 100%; padding: .8rem; color: #fff; background: #a52828; } .loading-progress { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 @media (max-width: 560px) {
   .topbar { padding: max(.8rem, env(safe-area-inset-top)) .85rem .85rem; align-items: center; }
@@ -39,4 +50,7 @@
   .category-panel:not(.expanded-mobile) .category-panel-body { display: none; }
   .category-panel:not(.expanded-mobile) { width: auto; }
   .category-panel:not(.expanded-mobile) .category-panel-toggle span { transform: rotate(0); }
+  .navigation-panel { top: 18%; left: .6rem; width: calc(100% - 1.2rem); }
+  #navigation-map { height: 220px; }
+  .navigation-guidance { top: 17%; }
 }
