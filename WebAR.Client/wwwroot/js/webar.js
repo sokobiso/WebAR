@@ -3,8 +3,9 @@ import { ARButton } from 'three/addons/webxr/ARButton.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-let stream, session, rafId, renderer, scene, camera, controls, detectionEnabled = true;
+let stream, session, rafId, cameraRafId, renderer, scene, camera, controls, detectionEnabled = true;
 let running = false, lastInference = 0, frames = 0, fpsSince = performance.now();
+let mirrorVideo = false, useCanvasCamera = false, lastCameraFrame = 0;
 let selectedObject, modelInput;
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const inputSize = 640;
@@ -15,7 +16,9 @@ export async function start(options) {
   const video = document.querySelector('#camera-feed'), status = document.querySelector('#status-text');
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-    video.srcObject = stream; await video.play(); initThree();
+    video.muted=true;video.autoplay=true;video.playsInline=true;video.setAttribute('playsinline','');video.srcObject=stream;await video.play();
+    const facingMode=stream.getVideoTracks()[0]?.getSettings?.().facingMode;mirrorVideo=facingMode==='user';video.classList.toggle('mirrored',mirrorVideo);
+    useCanvasCamera=/iPhone|iPad|iPod/i.test(navigator.userAgent);video.classList.toggle('canvas-fallback',useCanvasCamera);document.querySelector('#camera-layer').classList.toggle('active',useCanvasCamera);if(useCanvasCamera)renderCameraFrame();initThree();
     status.textContent = 'Caméra active · chargement du modèle YOLO11n…';
     if (!globalThis.ort) throw new Error('ONNX Runtime Web indisponible');
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/';
@@ -26,6 +29,13 @@ export async function start(options) {
     if (!renderer) initThree();
   }
   running = true; loop(options.confidence ?? 0.45);
+}
+
+function renderCameraFrame(now=performance.now()){
+  if(!running&&stream==null)return;const video=document.querySelector('#camera-feed'),canvas=document.querySelector('#camera-layer');
+  if(video.readyState>=2&&now-lastCameraFrame>=33){lastCameraFrame=now;const dpr=Math.min(devicePixelRatio||1,2),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+    const ctx=canvas.getContext('2d'),scale=Math.max(w/video.videoWidth,h/video.videoHeight),rw=video.videoWidth*scale,rh=video.videoHeight*scale,dx=(w-rw)/2,dy=(h-rh)/2;ctx.save();ctx.clearRect(0,0,w,h);if(mirrorVideo){ctx.translate(w,0);ctx.scale(-1,1);}ctx.drawImage(video,dx,dy,rw,rh);ctx.restore();}
+  cameraRafId=requestAnimationFrame(renderCameraFrame);
 }
 
 function initThree() {
@@ -84,7 +94,7 @@ function drawDetections(boxes,video){
   ctx.font=`bold ${Math.round(14*dpr)}px system-ui`;ctx.lineWidth=Math.max(2,2*dpr);
   for(const b of boxes){
     const sourceX=(b.x-b.w/2)/inputSize*video.videoWidth,sourceY=(b.y-b.h/2)/inputSize*video.videoHeight,w=b.w/inputSize*video.videoWidth*coverScale,h=b.h/inputSize*video.videoHeight*coverScale;
-    const x=displayW-(sourceX*coverScale+offsetX+w),y=sourceY*coverScale+offsetY;
+    const unmirroredX=sourceX*coverScale+offsetX,x=mirrorVideo?displayW-(unmirroredX+w):unmirroredX,y=sourceY*coverScale+offsetY;
     ctx.strokeStyle='#48e5c2';ctx.strokeRect(x,y,w,h);
     const text=`${labels[b.cls]??b.cls} ${Math.round(b.score*100)}%`,padding=6*dpr,labelH=23*dpr,tw=ctx.measureText(text).width+padding*2,labelX=Math.max(0,Math.min(x,displayW-tw)),labelY=Math.max(0,y-labelH);
     ctx.fillStyle='#48e5c2';ctx.fillRect(labelX,labelY,tw,labelH);ctx.fillStyle='#03110e';ctx.fillText(text,labelX+padding,labelY+17*dpr);
@@ -92,4 +102,4 @@ function drawDetections(boxes,video){
 }
 function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
 export function setDetectionEnabled(value){detectionEnabled=value;if(!value){const c=document.querySelector('#detection-layer');c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}
-export function stop(){running=false;cancelAnimationFrame(rafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
+export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}

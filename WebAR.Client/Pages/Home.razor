@@ -5,7 +5,7 @@
 
 <PageTitle>WebAR Vision</PageTitle>
 <main class="vision-shell"><section id="ar-stage" class="ar-stage">
-    <video id="camera-feed" autoplay muted playsinline></video><canvas id="detection-layer"></canvas><div id="three-layer"></div>
+    <video id="camera-feed" autoplay muted playsinline></video><canvas id="camera-layer"></canvas><canvas id="detection-layer"></canvas><div id="three-layer"></div>
     <header class="topbar"><div><span class="eyebrow">WEBAR VISION</span><h1>Voir. Reconnaître. Augmenter.</h1></div><span id="fps-badge" class="status-badge">Prêt</span></header>
     <aside class="control-panel"><p id="status-text">Démarrez la caméra pour lancer l’expérience.</p><div class="actions"><button class="primary" @onclick="StartAsync" disabled="@_started">@(_started ? "Vision active" : "Démarrer la vision")</button><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button class="model-button" @onclick="ChooseModelAsync" disabled="@(!_started)">Ajouter un objet 3D</button></div><small>Choisissez un fichier GLB/GLTF, puis touchez l’écran pour placer l’objet.</small></aside>
 </section></main>
