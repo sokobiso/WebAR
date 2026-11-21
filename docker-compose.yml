@@ -2,8 +2,8 @@ services:
   webar-api:
     container_name: webar-api
     build:
-      context: ./WebAR.API
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: WebAR.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
@@ -14,8 +14,8 @@ services:
   webar-client:
     container_name: webar-client
     build:
-      context: ./WebAR.Client
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: WebAR.Client/Dockerfile
     depends_on:
       - webar-api
     ports:

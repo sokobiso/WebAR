@@ -29,9 +29,9 @@ docker compose down
 
 ## Railway
 
-Créez deux services depuis le même dépôt et configurez leurs dossiers racines :
+Créez deux services depuis le même dépôt. Conservez la racine du dépôt comme contexte et configurez le chemin du Dockerfile de chaque service :
 
-- client : `/WebAR.Client`
-- API : `/WebAR.API`
+- client : `WebAR.Client/Dockerfile`
+- API : `WebAR.API/Dockerfile`
 
-Chaque dossier contient son propre `Dockerfile` et son fichier `railway.json`. Le client doit impérativement être construit avec son Dockerfile afin de servir la sortie publiée Blazor (`/app/publish/wwwroot`), et non le dossier source `wwwroot`.
+Ne configurez pas `WebAR.Client` ou `WebAR.API` comme dossier racine. Le client doit impérativement être construit avec son Dockerfile afin de servir la sortie publiée Blazor (`/app/publish/wwwroot`), et non le dossier source `wwwroot`.
