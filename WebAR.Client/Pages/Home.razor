@@ -7,7 +7,7 @@
 <main class="vision-shell"><section id="ar-stage" class="ar-stage">
     <video id="camera-feed" autoplay muted playsinline></video><canvas id="camera-layer"></canvas><canvas id="detection-layer"></canvas><div id="three-layer"></div>
     <header class="topbar"><div><span class="eyebrow">WEBAR VISION</span><h1>Voir. Reconnaître. Augmenter.</h1></div><span id="fps-badge" class="status-badge">Prêt</span></header>
-    <aside class="control-panel"><p id="status-text">Démarrez la caméra pour lancer l’expérience.</p><div class="actions"><button class="primary" @onclick="StartAsync" disabled="@_started">@(_started ? "Vision active" : "Démarrer la vision")</button><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button id="spatial-tracking-button" disabled="@(!_started)">Activer suivi spatial</button><button @onclick="AddSampleChairAsync" disabled="@(!_started)">Chaise exemple</button><button @onclick="ChooseModelAsync" disabled="@(!_started)">Importer GLB/GLTF</button><button class="tool-button @(_transformMode == "translate" ? "active" : "")" @onclick='() => SetTransformModeAsync("translate")' disabled="@(!_started)">Déplacer</button><button class="tool-button @(_transformMode == "rotate" ? "active" : "")" @onclick='() => SetTransformModeAsync("rotate")' disabled="@(!_started)">Tourner</button></div><small>Activez le suivi spatial, placez l’objet, puis utilisez les flèches ou les anneaux affichés en son centre.</small></aside>
+    <aside class="control-panel"><p id="status-text">Démarrez la caméra pour lancer l’expérience.</p><div class="actions"><button class="primary" onpointerdown="globalThis.requestWebARSensorPermission?.()" @onclick="StartAsync" disabled="@_started">@(_started ? "Vision active" : "Démarrer la vision")</button><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button id="spatial-tracking-button" disabled="@(!_started)">Suivi spatial actif</button><button @onclick="AddSampleChairAsync" disabled="@(!_started)">Chaise exemple</button><button @onclick="ChooseModelAsync" disabled="@(!_started)">Importer GLB/GLTF</button><button class="tool-button @(_transformMode == "translate" ? "active" : "")" @onclick='() => SetTransformModeAsync("translate")' disabled="@(!_started)">Déplacer</button><button class="tool-button @(_transformMode == "rotate" ? "active" : "")" @onclick='() => SetTransformModeAsync("rotate")' disabled="@(!_started)">Tourner</button></div><small>Le suivi spatial démarre avec la vision. Placez l’objet, puis utilisez les flèches ou les anneaux affichés en son centre.</small></aside>
 </section></main>
 
 @code {
@@ -15,10 +15,11 @@
     private bool _started;
     private bool _detecting;
     private string _transformMode = "translate";
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/webar.js"); }
     private async Task StartAsync() { _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/webar.js"); await _module.InvokeVoidAsync("start", new { modelUrl = "models/yolo11n.onnx", confidence = 0.45 }); _started = true; _detecting = true; }
     private async Task ToggleDetectionAsync() { if (_module is null) return; _detecting = !_detecting; await _module.InvokeVoidAsync("setDetectionEnabled", _detecting); }
     private async Task ChooseModelAsync() { if (_module is not null) await _module.InvokeVoidAsync("openModelPicker"); }
-    private async Task AddSampleChairAsync() { if (_module is not null) await _module.InvokeVoidAsync("addSampleChair"); }
+    private async Task AddSampleChairAsync() { if (_module is null) return; _detecting = false; await _module.InvokeVoidAsync("setDetectionEnabled", false); await _module.InvokeVoidAsync("addSampleChair"); }
     private async Task SetTransformModeAsync(string mode) { _transformMode = mode; if (_module is not null) await _module.InvokeVoidAsync("setTransformMode", mode); }
     public async ValueTask DisposeAsync() { if (_module is null) return; await _module.InvokeVoidAsync("stop"); await _module.DisposeAsync(); }
 }

@@ -8,11 +8,16 @@ let stream, session, rafId, cameraRafId, renderer, scene, camera, controls, tran
 let running = false, lastInference = 0, frames = 0, fpsSince = performance.now();
 let mirrorVideo = false, useCanvasCamera = false, lastCameraFrame = 0;
 let selectedObject, modelInput, selectedObjectKind;
-let orientationTracking = false, orientationHandler, orientationCalibration;
+let orientationTracking = false, orientationHandler, orientationCalibration, sensorPermissionGranted = false;
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const inputSize = 640;
 const chairTransformStorageKey = 'webar.sample-chair.transform.v1';
 const labels = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','couch','potted plant','bed','dining table','toilet','tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'];
+
+globalThis.requestWebARSensorPermission=async()=>{
+  try{sensorPermissionGranted=typeof DeviceOrientationEvent!=='undefined'&&(typeof DeviceOrientationEvent.requestPermission!=='function'||await DeviceOrientationEvent.requestPermission()==='granted');}
+  catch(error){sensorPermissionGranted=false;console.warn('Autorisation des capteurs:',error);}
+};
 
 export async function start(options) {
   if (running) return;
@@ -21,7 +26,7 @@ export async function start(options) {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
     video.muted=true;video.autoplay=true;video.playsInline=true;video.setAttribute('playsinline','');video.srcObject=stream;await video.play();
     const facingMode=stream.getVideoTracks()[0]?.getSettings?.().facingMode;mirrorVideo=facingMode==='user';video.classList.toggle('mirrored',mirrorVideo);
-    useCanvasCamera=/iPhone|iPad|iPod/i.test(navigator.userAgent);video.classList.toggle('canvas-fallback',useCanvasCamera);document.querySelector('#camera-layer').classList.toggle('active',useCanvasCamera);if(useCanvasCamera)renderCameraFrame();initThree();
+    useCanvasCamera=/iPhone|iPad|iPod/i.test(navigator.userAgent);video.classList.toggle('canvas-fallback',useCanvasCamera);document.querySelector('#camera-layer').classList.toggle('active',useCanvasCamera);if(useCanvasCamera)renderCameraFrame();initThree();await enableOrientationTracking(true);
     status.textContent = 'Caméra active · chargement du modèle YOLO11n…';
     if (!globalThis.ort) throw new Error('ONNX Runtime Web indisponible');
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/';
@@ -109,12 +114,13 @@ function removeSelectedObject(){
 
 export function setTransformMode(mode){if(mode!=='translate'&&mode!=='rotate')return;transformControls?.setMode(mode);if(transformHelper&&selectedObject?.visible)transformHelper.visible=true;}
 
-async function enableOrientationTracking(){
+async function enableOrientationTracking(automatic=false){
   const status=document.querySelector('#status-text'),button=document.querySelector('#spatial-tracking-button');
   try{
     if(typeof DeviceOrientationEvent==='undefined')throw new Error('capteurs d’orientation indisponibles');
-    if(typeof DeviceOrientationEvent.requestPermission==='function'){
-      const permission=await DeviceOrientationEvent.requestPermission();if(permission!=='granted')throw new Error('autorisation des capteurs refusée');
+    if(typeof DeviceOrientationEvent.requestPermission==='function'&&!sensorPermissionGranted){
+      if(automatic)throw new Error('touchez « Suivi spatial » pour autoriser les capteurs');
+      const permission=await DeviceOrientationEvent.requestPermission();if(permission!=='granted')throw new Error('autorisation des capteurs refusée');sensorPermissionGranted=true;
     }
     if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);
     orientationCalibration=null;orientationHandler=updateCameraOrientation;addEventListener('deviceorientation',orientationHandler,true);orientationTracking=true;controls.enabled=false;
