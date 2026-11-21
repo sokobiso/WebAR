@@ -9,9 +9,11 @@ let running = false, lastInference = 0, frames = 0, fpsSince = performance.now()
 let mirrorVideo = false, useCanvasCamera = false, lastCameraFrame = 0;
 let selectedObject, modelInput, selectedObjectKind;
 let orientationTracking = false, orientationHandler, orientationCalibration, sensorPermissionGranted = false;
+const discoveredCategories = new Map(), excludedCategories = new Set();
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const inputSize = 640;
 const chairTransformStorageKey = 'webar.sample-chair.transform.v1';
+const excludedCategoriesStorageKey = 'webar.excluded-categories.v1';
 const labels = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','couch','potted plant','bed','dining table','toilet','tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'];
 
 globalThis.requestWebARSensorPermission=async()=>{
@@ -55,6 +57,7 @@ function initThree() {
   renderer.setAnimationLoop(()=>{if(!orientationTracking)controls.update();renderer.render(scene,camera);});
   renderer.domElement.addEventListener('pointerdown', placeSelectedObject);
   document.querySelector('#spatial-tracking-button')?.addEventListener('click',enableOrientationTracking);
+  initCategoryPanel();
   createModelInput();
   if(navigator.xr) document.body.appendChild(ARButton.createButton(renderer,{optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}})); addEventListener('resize',resize);
 }
@@ -157,7 +160,8 @@ function drawDetections(boxes,video){
   if(canvas.width!==displayW||canvas.height!==displayH){canvas.width=displayW;canvas.height=displayH;}ctx.clearRect(0,0,displayW,displayH);
   const coverScale=Math.max(displayW/video.videoWidth,displayH/video.videoHeight),renderedW=video.videoWidth*coverScale,renderedH=video.videoHeight*coverScale,offsetX=(displayW-renderedW)/2,offsetY=(displayH-renderedH)/2;
   ctx.font=`bold ${Math.round(14*dpr)}px system-ui`;ctx.lineWidth=Math.max(2,2*dpr);
-  for(const b of boxes){
+  updateDetectedCategories(boxes);
+  for(const b of boxes.filter(b=>!excludedCategories.has(labels[b.cls]??String(b.cls)))){
     const sourceX=(b.x-b.w/2)/inputSize*video.videoWidth,sourceY=(b.y-b.h/2)/inputSize*video.videoHeight,w=b.w/inputSize*video.videoWidth*coverScale,h=b.h/inputSize*video.videoHeight*coverScale;
     const unmirroredX=sourceX*coverScale+offsetX,x=mirrorVideo?displayW-(unmirroredX+w):unmirroredX,y=sourceY*coverScale+offsetY;
     ctx.strokeStyle='#48e5c2';ctx.strokeRect(x,y,w,h);
@@ -165,6 +169,36 @@ function drawDetections(boxes,video){
     ctx.fillStyle='#48e5c2';ctx.fillRect(labelX,labelY,tw,labelH);ctx.fillStyle='#03110e';ctx.fillText(text,labelX+padding,labelY+17*dpr);
   }
 }
+
+function initCategoryPanel(){
+  try{for(const name of JSON.parse(localStorage.getItem(excludedCategoriesStorageKey))??[])excludedCategories.add(name);}catch(error){console.warn('Lecture des catégories exclues:',error);}
+  document.querySelector('#category-list')?.addEventListener('change',onCategoryFilterChange);
+  document.querySelector('#keep-all-categories')?.addEventListener('click',keepAllCategories);
+  document.querySelector('#exclude-all-categories')?.addEventListener('click',excludeAllCategories);
+  document.querySelector('#category-panel-toggle')?.addEventListener('click',toggleCategoryPanel);
+}
+
+function updateDetectedCategories(boxes){
+  const current=new Map();for(const box of boxes){const name=labels[box.cls]??String(box.cls),item=current.get(name)??{count:0,score:0};item.count++;item.score=Math.max(item.score,box.score);current.set(name,item);}
+  let changed=false;for(const [name,item] of current){const previous=discoveredCategories.get(name);if(!previous||previous.count!==item.count||Math.abs(previous.score-item.score)>.01){discoveredCategories.set(name,item);changed=true;}}
+  if(changed)renderCategoryPanel();
+}
+
+function renderCategoryPanel(){
+  const list=document.querySelector('#category-list');if(!list)return;list.replaceChildren();
+  if(!discoveredCategories.size){const empty=document.createElement('p');empty.className='category-empty';empty.textContent='Aucun objet détecté';list.appendChild(empty);return;}
+  for(const [name,item] of [...discoveredCategories].sort((a,b)=>b[1].score-a[1].score)){
+    const row=document.createElement('label');row.className='category-row';const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=!excludedCategories.has(name);checkbox.dataset.category=name;
+    const title=document.createElement('span');title.className='category-name';title.textContent=`${name} ×${item.count}`;const score=document.createElement('span');score.className='category-score';score.textContent=`${Math.round(item.score*100)} %`;
+    row.append(checkbox,title,score);list.appendChild(row);
+  }
+}
+
+function onCategoryFilterChange(event){const name=event.target?.dataset?.category;if(!name)return;if(event.target.checked)excludedCategories.delete(name);else excludedCategories.add(name);saveCategoryFilters();}
+function keepAllCategories(){excludedCategories.clear();saveCategoryFilters();renderCategoryPanel();}
+function excludeAllCategories(){for(const name of discoveredCategories.keys())excludedCategories.add(name);saveCategoryFilters();renderCategoryPanel();}
+function saveCategoryFilters(){try{localStorage.setItem(excludedCategoriesStorageKey,JSON.stringify([...excludedCategories]));}catch(error){console.warn('Sauvegarde des catégories exclues:',error);}}
+function toggleCategoryPanel(){const panel=document.querySelector('#category-panel'),mobile=matchMedia('(max-width: 560px)').matches;if(mobile)panel?.classList.toggle('expanded-mobile');else panel?.classList.toggle('collapsed');const expanded=mobile?panel?.classList.contains('expanded-mobile'):!panel?.classList.contains('collapsed');document.querySelector('#category-panel-toggle')?.setAttribute('aria-expanded',String(expanded));}
 function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
 export function setDetectionEnabled(value){detectionEnabled=value;if(!value){const c=document.querySelector('#detection-layer');c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}
-export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);document.querySelector('#spatial-tracking-button')?.removeEventListener('click',enableOrientationTracking);if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);orientationHandler=null;orientationTracking=false;transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
+export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);document.querySelector('#spatial-tracking-button')?.removeEventListener('click',enableOrientationTracking);document.querySelector('#category-list')?.removeEventListener('change',onCategoryFilterChange);document.querySelector('#keep-all-categories')?.removeEventListener('click',keepAllCategories);document.querySelector('#exclude-all-categories')?.removeEventListener('click',excludeAllCategories);document.querySelector('#category-panel-toggle')?.removeEventListener('click',toggleCategoryPanel);if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);orientationHandler=null;orientationTracking=false;transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
