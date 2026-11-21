@@ -1,3 +1,4 @@
+# This service is built from the repository root on Railway.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
