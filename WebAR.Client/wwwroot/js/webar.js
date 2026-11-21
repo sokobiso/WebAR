@@ -57,7 +57,7 @@ function createModelInput(){
 async function loadSelectedModel(event){
   const file=event.target.files?.[0];if(!file)return;const status=document.querySelector('#status-text'),url=URL.createObjectURL(file);status.textContent=`Chargement de ${file.name}…`;
   try{
-    const gltf=await new GLTFLoader().loadAsync(url),model=gltf.scene;
+    const gltf=await new GLTFLoader().loadAsync(url),model=gltf.scene;removeSelectedObject();
     const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),maxSize=Math.max(size.x,size.y,size.z)||1;
     model.position.sub(center);selectedObject=new THREE.Group();selectedObject.add(model);selectedObject.scale.setScalar(0.8/maxSize);selectedObject.visible=false;scene.add(selectedObject);document.querySelector('#three-layer')?.classList.remove('empty');
     status.textContent=`${file.name} chargé · touchez l’écran pour le placer.`;
@@ -72,6 +72,20 @@ function placeSelectedObject(event){
 }
 
 export function openModelPicker(){modelInput?.click();}
+
+export function addSampleChair(){
+  if(!scene)return;removeSelectedObject();
+  const chair=new THREE.Group(),wood=new THREE.MeshStandardMaterial({color:0x9a5b32,roughness:.62,metalness:.03}),darkWood=new THREE.MeshStandardMaterial({color:0x60351f,roughness:.72});
+  const part=(size,position,material=wood)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),material);mesh.position.set(...position);mesh.castShadow=true;mesh.receiveShadow=true;chair.add(mesh);};
+  part([1.1,.16,1.05],[0,.15,0]);
+  part([.14,1.15,.14],[-.42,-.5,-.37],darkWood);part([.14,1.15,.14],[.42,-.5,-.37],darkWood);part([.14,1.15,.14],[-.42,-.5,.37],darkWood);part([.14,1.15,.14],[.42,-.5,.37],darkWood);
+  part([.14,1.2,.14],[-.43,.82,.42],darkWood);part([.14,1.2,.14],[.43,.82,.42],darkWood);part([.78,.18,.12],[0,.58,.42]);part([.78,.18,.12],[0,.92,.42]);part([.78,.18,.12],[0,1.26,.42]);
+  selectedObject=chair;selectedObject.scale.setScalar(.65);selectedObject.visible=false;scene.add(selectedObject);document.querySelector('#three-layer')?.classList.remove('empty');document.querySelector('#status-text').textContent='Chaise chargée · touchez l’écran pour la placer.';
+}
+
+function removeSelectedObject(){
+  if(!selectedObject)return;scene?.remove(selectedObject);selectedObject.traverse?.(node=>{node.geometry?.dispose?.();if(Array.isArray(node.material))node.material.forEach(m=>m.dispose?.());else node.material?.dispose?.();});selectedObject=null;
+}
 
 async function loop(confidence) {
   if(!running)return; const now=performance.now(); frames++; if(now-fpsSince>1000){document.querySelector('#fps-badge').textContent=`${frames} FPS`;frames=0;fpsSince=now;}

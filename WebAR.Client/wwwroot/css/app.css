@@ -18,6 +18,5 @@
   .control-panel small { display: none; }
   .actions { gap: .45rem; }
   .actions button { flex: 1 1 calc(50% - .45rem); min-height: 42px; padding: .55rem .6rem; font-size: .9rem; }
-  .actions .model-button { flex-basis: 100%; }
   #ARButton { bottom: 154px !important; }
 }
