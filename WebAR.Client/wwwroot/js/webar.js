@@ -98,6 +98,10 @@ export function addSampleChair(){
   else document.querySelector('#status-text').textContent='Chaise chargée · touchez l’écran pour la placer.';
 }
 
+export function removeSampleChair(){
+  if(selectedObjectKind!=='sample-chair')return;removeSelectedObject();document.querySelector('#three-layer')?.classList.add('empty');document.querySelector('#status-text').textContent='IA active · chaise retirée de la scène.';
+}
+
 function saveSelectedObjectTransform(){
   if(selectedObjectKind!=='sample-chair'||!selectedObject?.visible)return;
   try{localStorage.setItem(chairTransformStorageKey,JSON.stringify({position:selectedObject.position.toArray(),quaternion:selectedObject.quaternion.toArray(),scale:selectedObject.scale.toArray()}));}catch(error){console.warn('Sauvegarde de la position de la chaise impossible:',error);}
