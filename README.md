@@ -26,3 +26,12 @@ Arrêter les conteneurs :
 ```bash
 docker compose down
 ```
+
+## Railway
+
+Créez deux services depuis le même dépôt et configurez leurs dossiers racines :
+
+- client : `/WebAR.Client`
+- API : `/WebAR.API`
+
+Chaque dossier contient son propre `Dockerfile` et son fichier `railway.json`. Le client doit impérativement être construit avec son Dockerfile afin de servir la sortie publiée Blazor (`/app/publish/wwwroot`), et non le dossier source `wwwroot`.

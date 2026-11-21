@@ -1,11 +1,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY WebAR.API/WebAR.API.csproj WebAR.API/
-RUN dotnet restore WebAR.API/WebAR.API.csproj
+COPY WebAR.API.csproj ./
+RUN dotnet restore WebAR.API.csproj
 
-COPY WebAR.API/ WebAR.API/
-RUN dotnet publish WebAR.API/WebAR.API.csproj \
+COPY . ./
+RUN dotnet publish WebAR.API.csproj \
     --configuration Release \
     --no-restore \
     --output /app/publish \
