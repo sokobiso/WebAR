@@ -29,8 +29,8 @@ export async function start(options) {
 }
 
 function initThree() {
-  const host = document.querySelector('#three-layer'); scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .01, 50); camera.position.set(0,.1,3);
-  renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true }); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight); renderer.xr.enabled=true; host.appendChild(renderer.domElement);
+  const host = document.querySelector('#three-layer');host.classList.add('empty');scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .01, 50); camera.position.set(0,.1,3);
+  renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true, premultipliedAlpha:false });renderer.setClearColor(0x000000,0);renderer.setClearAlpha(0);renderer.domElement.style.background='transparent'; renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight); renderer.xr.enabled=true; host.appendChild(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xe8fbff,0x23313b,3)); const key=new THREE.DirectionalLight(0x48e5c2,5); key.position.set(2,3,4); scene.add(key);
   controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.enablePan=false; controls.minDistance=1.3; controls.maxDistance=6;
   renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
@@ -49,7 +49,7 @@ async function loadSelectedModel(event){
   try{
     const gltf=await new GLTFLoader().loadAsync(url),model=gltf.scene;
     const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),maxSize=Math.max(size.x,size.y,size.z)||1;
-    model.position.sub(center);selectedObject=new THREE.Group();selectedObject.add(model);selectedObject.scale.setScalar(0.8/maxSize);selectedObject.visible=false;scene.add(selectedObject);
+    model.position.sub(center);selectedObject=new THREE.Group();selectedObject.add(model);selectedObject.scale.setScalar(0.8/maxSize);selectedObject.visible=false;scene.add(selectedObject);document.querySelector('#three-layer')?.classList.remove('empty');
     status.textContent=`${file.name} chargé · touchez l’écran pour le placer.`;
   }catch(error){console.error('Chargement GLB/GLTF:',error);status.textContent=`Impossible de charger ${file.name}. Utilisez de préférence un fichier GLB autonome.`;}
   finally{URL.revokeObjectURL(url);event.target.value='';}
