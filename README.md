@@ -1,5 +1,5 @@
 # WebAR Vision
-Prototype .NET 10 : `WebAR.Client` (Blazor WebAssembly, caméra JS, YOLO11n/ONNX Runtime Web, Three.js/WebXR) et `WebAR.API` (API avec endpoint de santé).
+Prototype .NET 10 : `WebAR.Client` (Blazor Server interactif, caméra JS, YOLO11n/ONNX Runtime Web, Three.js/WebXR) et `WebAR.API` (API avec endpoint de santé).
 
 ## Démarrage
 1. Copier `yolo11n.onnx` dans `WebAR.Client/wwwroot/models/` (instructions dans ce dossier).

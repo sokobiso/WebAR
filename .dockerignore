@@ -7,6 +7,5 @@
 *.suo
 *.pt
 artifacts/
-Dockerfile*
 docker-compose*.yml
 README.md
