@@ -1,0 +1,20 @@
+@page "/"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<PageTitle>WebAR Vision</PageTitle>
+<main class="vision-shell"><section id="ar-stage" class="ar-stage">
+    <video id="camera-feed" autoplay muted playsinline></video><canvas id="detection-layer"></canvas><div id="three-layer"></div>
+    <header class="topbar"><div><span class="eyebrow">WEBAR VISION</span><h1>Voir. Reconnaître. Augmenter.</h1></div><span id="fps-badge" class="status-badge">Prêt</span></header>
+    <aside class="control-panel"><p id="status-text">Démarrez la caméra pour lancer l’expérience.</p><div class="actions"><button class="primary" @onclick="StartAsync" disabled="@_started">Démarrer la vision</button><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button @onclick="ChooseModelAsync" disabled="@(!_started)">Ajouter un objet 3D</button></div><small>Choisissez un fichier GLB/GLTF, puis touchez l’écran pour placer l’objet.</small></aside>
+</section></main>
+
+@code {
+    private IJSObjectReference? _module;
+    private bool _started;
+    private bool _detecting;
+    private async Task StartAsync() { _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/webar.js"); await _module.InvokeVoidAsync("start", new { modelUrl = "models/yolo11n.onnx", confidence = 0.45 }); _started = true; _detecting = true; }
+    private async Task ToggleDetectionAsync() { if (_module is null) return; _detecting = !_detecting; await _module.InvokeVoidAsync("setDetectionEnabled", _detecting); }
+    private async Task ChooseModelAsync() { if (_module is not null) await _module.InvokeVoidAsync("openModelPicker"); }
+    public async ValueTask DisposeAsync() { if (_module is null) return; await _module.InvokeVoidAsync("stop"); await _module.DisposeAsync(); }
+}

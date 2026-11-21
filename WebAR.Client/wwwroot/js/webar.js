@@ -1,0 +1,83 @@
+import * as THREE from 'three';
+import { ARButton } from 'three/addons/webxr/ARButton.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+let stream, session, rafId, renderer, scene, camera, controls, detectionEnabled = true;
+let running = false, lastInference = 0, frames = 0, fpsSince = performance.now();
+let selectedObject, modelInput;
+const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+const inputSize = 640;
+const labels = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','couch','potted plant','bed','dining table','toilet','tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'];
+
+export async function start(options) {
+  if (running) return;
+  const video = document.querySelector('#camera-feed'), status = document.querySelector('#status-text');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    video.srcObject = stream; await video.play(); initThree();
+    status.textContent = 'Caméra active · chargement du modèle YOLO11n…';
+    if (!globalThis.ort) throw new Error('ONNX Runtime Web indisponible');
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/';
+    session = await ort.InferenceSession.create(options.modelUrl, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    status.textContent = 'YOLO11n actif · traitement local dans votre navigateur.';
+  } catch (error) {
+    console.warn(error); status.textContent = error.name === 'NotAllowedError' ? 'Accès caméra refusé. Autorisez la caméra puis réessayez.' : `Mode 3D actif · IA indisponible (${error.message}). Ajoutez models/yolo11n.onnx.`;
+    if (!renderer) initThree();
+  }
+  running = true; loop(options.confidence ?? 0.45);
+}
+
+function initThree() {
+  const host = document.querySelector('#three-layer'); scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .01, 50); camera.position.set(0,.1,3);
+  renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true }); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight); renderer.xr.enabled=true; host.appendChild(renderer.domElement);
+  scene.add(new THREE.HemisphereLight(0xe8fbff,0x23313b,3)); const key=new THREE.DirectionalLight(0x48e5c2,5); key.position.set(2,3,4); scene.add(key);
+  controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.enablePan=false; controls.minDistance=1.3; controls.maxDistance=6;
+  renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
+  renderer.domElement.addEventListener('pointerdown', placeSelectedObject);
+  createModelInput();
+  if(navigator.xr) document.body.appendChild(ARButton.createButton(renderer,{optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}})); addEventListener('resize',resize);
+}
+
+function createModelInput(){
+  modelInput=document.createElement('input');modelInput.type='file';modelInput.accept='.glb,.gltf,model/gltf-binary,model/gltf+json';modelInput.hidden=true;
+  modelInput.addEventListener('change',loadSelectedModel);document.body.appendChild(modelInput);
+}
+
+async function loadSelectedModel(event){
+  const file=event.target.files?.[0];if(!file)return;const status=document.querySelector('#status-text'),url=URL.createObjectURL(file);status.textContent=`Chargement de ${file.name}…`;
+  try{
+    const gltf=await new GLTFLoader().loadAsync(url),model=gltf.scene;
+    const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),maxSize=Math.max(size.x,size.y,size.z)||1;
+    model.position.sub(center);selectedObject=new THREE.Group();selectedObject.add(model);selectedObject.scale.setScalar(0.8/maxSize);selectedObject.visible=false;scene.add(selectedObject);
+    status.textContent=`${file.name} chargé · touchez l’écran pour le placer.`;
+  }catch(error){console.error('Chargement GLB/GLTF:',error);status.textContent=`Impossible de charger ${file.name}. Utilisez de préférence un fichier GLB autonome.`;}
+  finally{URL.revokeObjectURL(url);event.target.value='';}
+}
+
+function placeSelectedObject(event){
+  if(!selectedObject)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((event.clientX-rect.left)/rect.width)*2-1;pointer.y=-((event.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(pointer,camera);const position=raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(2));selectedObject.position.copy(position);selectedObject.visible=true;
+  document.querySelector('#status-text').textContent='Objet placé · glissez pour tourner la vue, utilisez la molette pour zoomer.';
+}
+
+export function openModelPicker(){modelInput?.click();}
+
+async function loop(confidence) {
+  if(!running)return; const now=performance.now(); frames++; if(now-fpsSince>1000){document.querySelector('#fps-badge').textContent=`${frames} FPS`;frames=0;fpsSince=now;}
+  if(session&&detectionEnabled&&now-lastInference>180){lastInference=now;try{await detect(confidence);}catch(error){console.error('Inference YOLO:',error);}}
+  rafId=requestAnimationFrame(()=>loop(confidence));
+}
+
+async function detect(confidence) {
+  const video=document.querySelector('#camera-feed');if(video.readyState<2)return;const prep=document.createElement('canvas');prep.width=prep.height=inputSize;const ctx=prep.getContext('2d',{willReadFrequently:true});ctx.drawImage(video,0,0,inputSize,inputSize);const pixels=ctx.getImageData(0,0,inputSize,inputSize).data,data=new Float32Array(3*inputSize*inputSize);
+  for(let i=0;i<inputSize*inputSize;i++){data[i]=pixels[i*4]/255;data[i+inputSize*inputSize]=pixels[i*4+1]/255;data[i+2*inputSize*inputSize]=pixels[i*4+2]/255;}
+  const input=session.inputNames[0],results=await session.run({[input]:new ort.Tensor('float32',data,[1,3,inputSize,inputSize])});drawDetections(parseOutput(results[session.outputNames[0]],confidence),video);
+}
+
+function parseOutput(tensor,threshold){const d=tensor.data,dims=tensor.dims,channels=dims[1]<=100?dims[1]:dims[2],count=dims[1]<=100?dims[2]:dims[1],transposed=dims[1]<=100,at=(c,i)=>transposed?d[c*count+i]:d[i*channels+c],boxes=[];for(let i=0;i<count;i++){let score=0,cls=0;for(let c=4;c<channels;c++)if(at(c,i)>score){score=at(c,i);cls=c-4;}if(score>=threshold)boxes.push({x:at(0,i),y:at(1,i),w:at(2,i),h:at(3,i),score,cls});}boxes.sort((a,b)=>b.score-a.score);const kept=[];for(const b of boxes.slice(0,100))if(!kept.some(k=>iou(b,k)>.45))kept.push(b);return kept.slice(0,20);}
+function iou(a,b){const ax1=a.x-a.w/2,ay1=a.y-a.h/2,ax2=a.x+a.w/2,ay2=a.y+a.h/2,bx1=b.x-b.w/2,by1=b.y-b.h/2,bx2=b.x+b.w/2,by2=b.y+b.h/2,area=Math.max(0,Math.min(ax2,bx2)-Math.max(ax1,bx1))*Math.max(0,Math.min(ay2,by2)-Math.max(ay1,by1));return area/(a.w*a.h+b.w*b.h-area);}
+function drawDetections(boxes,video){const canvas=document.querySelector('#detection-layer'),ctx=canvas.getContext('2d');canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.clearRect(0,0,canvas.width,canvas.height);const sx=canvas.width/inputSize,sy=canvas.height/inputSize;ctx.font='bold 16px system-ui';for(const b of boxes){const w=b.w*sx,h=b.h*sy,x=canvas.width-(b.x+b.w/2)*sx,y=(b.y-b.h/2)*sy;ctx.strokeStyle='#48e5c2';ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);const text=`${labels[b.cls]??b.cls} ${Math.round(b.score*100)}%`,tw=ctx.measureText(text).width+12,labelX=Math.min(x,canvas.width-tw);ctx.fillStyle='#48e5c2';ctx.fillRect(labelX,y-25,tw,25);ctx.fillStyle='#03110e';ctx.fillText(text,labelX+6,y-7);}}
+function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
+export function setDetectionEnabled(value){detectionEnabled=value;if(!value){const c=document.querySelector('#detection-layer');c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}
+export function stop(){running=false;cancelAnimationFrame(rafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}

@@ -1,0 +1,18 @@
+# .NET build outputs
+**/bin/
+**/obj/
+
+# IDE and user-local settings
+.vs/
+*.user
+*.suo
+
+# Local .NET CLI state
+.dotnet-cli/
+
+# Source training weights (the exported ONNX model is versioned)
+*.pt
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

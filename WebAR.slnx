@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="WebAR.API/WebAR.API.csproj" />
+  <Project Path="WebAR.Client/WebAR.Client.csproj" />
+</Solution>
