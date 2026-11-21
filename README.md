@@ -35,3 +35,5 @@ Créez deux services depuis le même dépôt. Conservez la racine du dépôt com
 - API : `WebAR.API/Dockerfile`
 
 Ne configurez pas `WebAR.Client` ou `WebAR.API` comme dossier racine. Le client doit impérativement être construit avec son Dockerfile afin de servir la sortie publiée Blazor (`/app/publish/wwwroot`), et non le dossier source `wwwroot`.
+
+Le `Dockerfile` et le `railway.json` placés à la racine configurent le client par défaut. Pour le service API, sélectionnez explicitement `WebAR.API/Dockerfile` dans ses paramètres Railway.
