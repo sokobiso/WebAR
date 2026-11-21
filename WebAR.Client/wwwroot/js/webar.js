@@ -59,7 +59,7 @@ function initThree() {
   renderer.domElement.addEventListener('pointerdown', placeSelectedObject);
   document.querySelector('#spatial-tracking-button')?.addEventListener('click',enableOrientationTracking);
   initCategoryPanel();
-  document.querySelector('#navigation-close')?.addEventListener('click',stopNavigation);
+  document.querySelector('#navigation-close')?.addEventListener('click',hideNavigationMap);
   createModelInput();
   if(navigator.xr) document.body.appendChild(ARButton.createButton(renderer,{optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}})); addEventListener('resize',resize);
 }
@@ -149,7 +149,7 @@ function updateCameraOrientation(event){
 }
 
 export function startNavigation(){
-  const panel=document.querySelector('#navigation-panel'),help=document.querySelector('#navigation-help');panel?.classList.add('active');
+  const panel=document.querySelector('#navigation-panel'),help=document.querySelector('#navigation-help'),guidance=document.querySelector('#navigation-guidance');panel?.classList.add('active');guidance.hidden=false;document.querySelector('#navigation-instruction').textContent=routeSteps.length?'Navigation active':'Choisissez une destination';document.querySelector('#navigation-distance').textContent=routeSteps.length?'Suivez les indications':'Touchez un point sur la carte';
   if(!globalThis.L){help.textContent='La carte OpenStreetMap est indisponible.';return;}
   if(!navigationMap){
     navigationMap=L.map('navigation-map',{zoomControl:true}).setView([33.5731,-7.5898],14);
@@ -195,7 +195,8 @@ function toLatLng(location){return{lat:location[1],lng:location[0]};}
 function distanceMeters(a,b){const r=6371000,p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dp=(b.lat-a.lat)*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180,s=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return 2*r*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
 function bearingDegrees(a,b){const p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180;return(Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))*180/Math.PI+360)%360;}
 function formatDistance(value){return value<1000?`${Math.max(1,Math.round(value))} m`:`${(value/1000).toFixed(1)} km`;}
-function stopNavigation(){document.querySelector('#navigation-panel')?.classList.remove('active');document.querySelector('#navigation-guidance').hidden=true;if(locationWatchId!=null)navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;}
+function hideNavigationMap(){document.querySelector('#navigation-panel')?.classList.remove('active');}
+function stopNavigation(){hideNavigationMap();document.querySelector('#navigation-guidance').hidden=true;if(locationWatchId!=null)navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;}
 
 async function loop(confidence) {
   if(!running)return; const now=performance.now(); frames++; if(now-fpsSince>1000){document.querySelector('#fps-badge').textContent=`${frames} FPS`;frames=0;fpsSince=now;}
@@ -257,4 +258,4 @@ function saveCategoryFilters(){try{localStorage.setItem(excludedCategoriesStorag
 function toggleCategoryPanel(){const panel=document.querySelector('#category-panel'),mobile=matchMedia('(max-width: 560px)').matches;if(mobile){const expanded=panel?.classList.toggle('expanded-mobile');panel?.classList.toggle('collapsed',!expanded);}else panel?.classList.toggle('collapsed');const expanded=mobile?panel?.classList.contains('expanded-mobile'):!panel?.classList.contains('collapsed');document.querySelector('#category-panel-toggle')?.setAttribute('aria-expanded',String(expanded));}
 function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
 export function setDetectionEnabled(value){detectionEnabled=value;if(!value){const c=document.querySelector('#detection-layer');c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}
-export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);stopNavigation();renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);document.querySelector('#spatial-tracking-button')?.removeEventListener('click',enableOrientationTracking);document.querySelector('#navigation-close')?.removeEventListener('click',stopNavigation);document.querySelector('#category-list')?.removeEventListener('change',onCategoryFilterChange);document.querySelector('#keep-all-categories')?.removeEventListener('click',keepAllCategories);document.querySelector('#exclude-all-categories')?.removeEventListener('click',excludeAllCategories);document.querySelector('#category-panel-toggle')?.removeEventListener('click',toggleCategoryPanel);if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);orientationHandler=null;orientationTracking=false;transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
+export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);stopNavigation();renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);document.querySelector('#spatial-tracking-button')?.removeEventListener('click',enableOrientationTracking);document.querySelector('#navigation-close')?.removeEventListener('click',hideNavigationMap);document.querySelector('#category-list')?.removeEventListener('change',onCategoryFilterChange);document.querySelector('#keep-all-categories')?.removeEventListener('click',keepAllCategories);document.querySelector('#exclude-all-categories')?.removeEventListener('click',excludeAllCategories);document.querySelector('#category-panel-toggle')?.removeEventListener('click',toggleCategoryPanel);if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);orientationHandler=null;orientationTracking=false;transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
