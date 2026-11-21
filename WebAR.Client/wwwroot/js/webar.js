@@ -7,9 +7,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 let stream, session, rafId, cameraRafId, renderer, scene, camera, controls, transformControls, transformHelper, detectionEnabled = true;
 let running = false, lastInference = 0, frames = 0, fpsSince = performance.now();
 let mirrorVideo = false, useCanvasCamera = false, lastCameraFrame = 0;
-let selectedObject, modelInput;
+let selectedObject, modelInput, selectedObjectKind;
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const inputSize = 640;
+const chairTransformStorageKey = 'webar.sample-chair.transform.v1';
 const labels = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','couch','potted plant','bed','dining table','toilet','tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'];
 
 export async function start(options) {
@@ -44,7 +45,7 @@ function initThree() {
   renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true, premultipliedAlpha:false });renderer.setClearColor(0x000000,0);renderer.setClearAlpha(0);renderer.domElement.style.background='transparent'; renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight); renderer.xr.enabled=true; host.appendChild(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xe8fbff,0x23313b,3)); const key=new THREE.DirectionalLight(0x48e5c2,5); key.position.set(2,3,4); scene.add(key);
   controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.enablePan=false; controls.minDistance=1.3; controls.maxDistance=6;
-  transformControls=new TransformControls(camera,renderer.domElement);transformControls.setMode('translate');transformControls.setSize(.8);transformControls.addEventListener('dragging-changed',event=>{controls.enabled=!event.value;});transformHelper=transformControls.getHelper();transformHelper.visible=false;scene.add(transformHelper);
+  transformControls=new TransformControls(camera,renderer.domElement);transformControls.setMode('translate');transformControls.setSize(.8);transformControls.addEventListener('dragging-changed',event=>{controls.enabled=!event.value;});transformControls.addEventListener('objectChange',saveSelectedObjectTransform);transformHelper=transformControls.getHelper();transformHelper.visible=false;scene.add(transformHelper);
   renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
   renderer.domElement.addEventListener('pointerdown', placeSelectedObject);
   createModelInput();
@@ -61,7 +62,7 @@ async function loadSelectedModel(event){
   try{
     const gltf=await new GLTFLoader().loadAsync(url),model=gltf.scene;removeSelectedObject();
     const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),maxSize=Math.max(size.x,size.y,size.z)||1;
-    model.position.sub(center);selectedObject=new THREE.Group();selectedObject.add(model);selectedObject.scale.setScalar(0.8/maxSize);selectedObject.visible=false;scene.add(selectedObject);document.querySelector('#three-layer')?.classList.remove('empty');
+    model.position.sub(center);selectedObject=new THREE.Group();selectedObjectKind='uploaded';selectedObject.add(model);selectedObject.scale.setScalar(0.8/maxSize);selectedObject.visible=false;scene.add(selectedObject);document.querySelector('#three-layer')?.classList.remove('empty');
     status.textContent=`${file.name} chargé · touchez l’écran pour le placer.`;
   }catch(error){console.error('Chargement GLB/GLTF:',error);status.textContent=`Impossible de charger ${file.name}. Utilisez de préférence un fichier GLB autonome.`;}
   finally{URL.revokeObjectURL(url);event.target.value='';}
@@ -69,7 +70,7 @@ async function loadSelectedModel(event){
 
 function placeSelectedObject(event){
   if(!selectedObject||selectedObject.visible)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((event.clientX-rect.left)/rect.width)*2-1;pointer.y=-((event.clientY-rect.top)/rect.height)*2+1;
-  raycaster.setFromCamera(pointer,camera);const position=raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(2));selectedObject.position.copy(position);selectedObject.visible=true;transformControls.attach(selectedObject);transformHelper.visible=true;
+  raycaster.setFromCamera(pointer,camera);const position=raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(2));selectedObject.position.copy(position);selectedObject.visible=true;transformControls.attach(selectedObject);transformHelper.visible=true;saveSelectedObjectTransform();
   document.querySelector('#status-text').textContent='Objet placé · utilisez le gizmo central pour le déplacer ou le tourner.';
 }
 
@@ -82,11 +83,26 @@ export function addSampleChair(){
   part([1.1,.16,1.05],[0,.15,0]);
   part([.14,1.15,.14],[-.42,-.5,-.37],darkWood);part([.14,1.15,.14],[.42,-.5,-.37],darkWood);part([.14,1.15,.14],[-.42,-.5,.37],darkWood);part([.14,1.15,.14],[.42,-.5,.37],darkWood);
   part([.14,1.2,.14],[-.43,.82,.42],darkWood);part([.14,1.2,.14],[.43,.82,.42],darkWood);part([.78,.18,.12],[0,.58,.42]);part([.78,.18,.12],[0,.92,.42]);part([.78,.18,.12],[0,1.26,.42]);
-  selectedObject=chair;selectedObject.scale.setScalar(.65);selectedObject.visible=false;scene.add(selectedObject);document.querySelector('#three-layer')?.classList.remove('empty');document.querySelector('#status-text').textContent='Chaise chargée · touchez l’écran pour la placer.';
+  selectedObject=chair;selectedObjectKind='sample-chair';selectedObject.scale.setScalar(.65);selectedObject.visible=false;scene.add(selectedObject);document.querySelector('#three-layer')?.classList.remove('empty');
+  if(restoreChairTransform()){transformControls.attach(selectedObject);transformHelper.visible=true;document.querySelector('#status-text').textContent='Chaise restaurée à sa dernière position.';}
+  else document.querySelector('#status-text').textContent='Chaise chargée · touchez l’écran pour la placer.';
+}
+
+function saveSelectedObjectTransform(){
+  if(selectedObjectKind!=='sample-chair'||!selectedObject?.visible)return;
+  try{localStorage.setItem(chairTransformStorageKey,JSON.stringify({position:selectedObject.position.toArray(),quaternion:selectedObject.quaternion.toArray(),scale:selectedObject.scale.toArray()}));}catch(error){console.warn('Sauvegarde de la position de la chaise impossible:',error);}
+}
+
+function restoreChairTransform(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(chairTransformStorageKey));
+    if(!saved||!Array.isArray(saved.position)||!Array.isArray(saved.quaternion)||!Array.isArray(saved.scale))return false;
+    selectedObject.position.fromArray(saved.position);selectedObject.quaternion.fromArray(saved.quaternion);selectedObject.scale.fromArray(saved.scale);selectedObject.visible=true;return true;
+  }catch(error){console.warn('Restauration de la position de la chaise impossible:',error);return false;}
 }
 
 function removeSelectedObject(){
-  if(!selectedObject)return;transformControls?.detach();if(transformHelper)transformHelper.visible=false;scene?.remove(selectedObject);selectedObject.traverse?.(node=>{node.geometry?.dispose?.();if(Array.isArray(node.material))node.material.forEach(m=>m.dispose?.());else node.material?.dispose?.();});selectedObject=null;
+  if(!selectedObject)return;transformControls?.detach();if(transformHelper)transformHelper.visible=false;scene?.remove(selectedObject);selectedObject.traverse?.(node=>{node.geometry?.dispose?.();if(Array.isArray(node.material))node.material.forEach(m=>m.dispose?.());else node.material?.dispose?.();});selectedObject=null;selectedObjectKind=null;
 }
 
 export function setTransformMode(mode){if(mode!=='translate'&&mode!=='rotate')return;transformControls?.setMode(mode);if(transformHelper&&selectedObject?.visible)transformHelper.visible=true;}
