@@ -77,7 +77,19 @@ async function detect(confidence) {
 
 function parseOutput(tensor,threshold){const d=tensor.data,dims=tensor.dims,channels=dims[1]<=100?dims[1]:dims[2],count=dims[1]<=100?dims[2]:dims[1],transposed=dims[1]<=100,at=(c,i)=>transposed?d[c*count+i]:d[i*channels+c],boxes=[];for(let i=0;i<count;i++){let score=0,cls=0;for(let c=4;c<channels;c++)if(at(c,i)>score){score=at(c,i);cls=c-4;}if(score>=threshold)boxes.push({x:at(0,i),y:at(1,i),w:at(2,i),h:at(3,i),score,cls});}boxes.sort((a,b)=>b.score-a.score);const kept=[];for(const b of boxes.slice(0,100))if(!kept.some(k=>iou(b,k)>.45))kept.push(b);return kept.slice(0,20);}
 function iou(a,b){const ax1=a.x-a.w/2,ay1=a.y-a.h/2,ax2=a.x+a.w/2,ay2=a.y+a.h/2,bx1=b.x-b.w/2,by1=b.y-b.h/2,bx2=b.x+b.w/2,by2=b.y+b.h/2,area=Math.max(0,Math.min(ax2,bx2)-Math.max(ax1,bx1))*Math.max(0,Math.min(ay2,by2)-Math.max(ay1,by1));return area/(a.w*a.h+b.w*b.h-area);}
-function drawDetections(boxes,video){const canvas=document.querySelector('#detection-layer'),ctx=canvas.getContext('2d');canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.clearRect(0,0,canvas.width,canvas.height);const sx=canvas.width/inputSize,sy=canvas.height/inputSize;ctx.font='bold 16px system-ui';for(const b of boxes){const w=b.w*sx,h=b.h*sy,x=canvas.width-(b.x+b.w/2)*sx,y=(b.y-b.h/2)*sy;ctx.strokeStyle='#48e5c2';ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);const text=`${labels[b.cls]??b.cls} ${Math.round(b.score*100)}%`,tw=ctx.measureText(text).width+12,labelX=Math.min(x,canvas.width-tw);ctx.fillStyle='#48e5c2';ctx.fillRect(labelX,y-25,tw,25);ctx.fillStyle='#03110e';ctx.fillText(text,labelX+6,y-7);}}
+function drawDetections(boxes,video){
+  const canvas=document.querySelector('#detection-layer'),ctx=canvas.getContext('2d'),dpr=Math.min(devicePixelRatio||1,2),displayW=Math.round(canvas.clientWidth*dpr),displayH=Math.round(canvas.clientHeight*dpr);
+  if(canvas.width!==displayW||canvas.height!==displayH){canvas.width=displayW;canvas.height=displayH;}ctx.clearRect(0,0,displayW,displayH);
+  const coverScale=Math.max(displayW/video.videoWidth,displayH/video.videoHeight),renderedW=video.videoWidth*coverScale,renderedH=video.videoHeight*coverScale,offsetX=(displayW-renderedW)/2,offsetY=(displayH-renderedH)/2;
+  ctx.font=`bold ${Math.round(14*dpr)}px system-ui`;ctx.lineWidth=Math.max(2,2*dpr);
+  for(const b of boxes){
+    const sourceX=(b.x-b.w/2)/inputSize*video.videoWidth,sourceY=(b.y-b.h/2)/inputSize*video.videoHeight,w=b.w/inputSize*video.videoWidth*coverScale,h=b.h/inputSize*video.videoHeight*coverScale;
+    const x=displayW-(sourceX*coverScale+offsetX+w),y=sourceY*coverScale+offsetY;
+    ctx.strokeStyle='#48e5c2';ctx.strokeRect(x,y,w,h);
+    const text=`${labels[b.cls]??b.cls} ${Math.round(b.score*100)}%`,padding=6*dpr,labelH=23*dpr,tw=ctx.measureText(text).width+padding*2,labelX=Math.max(0,Math.min(x,displayW-tw)),labelY=Math.max(0,y-labelH);
+    ctx.fillStyle='#48e5c2';ctx.fillRect(labelX,labelY,tw,labelH);ctx.fillStyle='#03110e';ctx.fillText(text,labelX+padding,labelY+17*dpr);
+  }
+}
 function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
 export function setDetectionEnabled(value){detectionEnabled=value;if(!value){const c=document.querySelector('#detection-layer');c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}
 export function stop(){running=false;cancelAnimationFrame(rafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
