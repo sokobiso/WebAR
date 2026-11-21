@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { ARButton } from 'three/addons/webxr/ARButton.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-let stream, session, rafId, cameraRafId, renderer, scene, camera, controls, detectionEnabled = true;
+let stream, session, rafId, cameraRafId, renderer, scene, camera, controls, transformControls, transformHelper, detectionEnabled = true;
 let running = false, lastInference = 0, frames = 0, fpsSince = performance.now();
 let mirrorVideo = false, useCanvasCamera = false, lastCameraFrame = 0;
 let selectedObject, modelInput;
@@ -43,6 +44,7 @@ function initThree() {
   renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true, premultipliedAlpha:false });renderer.setClearColor(0x000000,0);renderer.setClearAlpha(0);renderer.domElement.style.background='transparent'; renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight); renderer.xr.enabled=true; host.appendChild(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xe8fbff,0x23313b,3)); const key=new THREE.DirectionalLight(0x48e5c2,5); key.position.set(2,3,4); scene.add(key);
   controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.enablePan=false; controls.minDistance=1.3; controls.maxDistance=6;
+  transformControls=new TransformControls(camera,renderer.domElement);transformControls.setMode('translate');transformControls.setSize(.8);transformControls.addEventListener('dragging-changed',event=>{controls.enabled=!event.value;});transformHelper=transformControls.getHelper();transformHelper.visible=false;scene.add(transformHelper);
   renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
   renderer.domElement.addEventListener('pointerdown', placeSelectedObject);
   createModelInput();
@@ -66,9 +68,9 @@ async function loadSelectedModel(event){
 }
 
 function placeSelectedObject(event){
-  if(!selectedObject)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((event.clientX-rect.left)/rect.width)*2-1;pointer.y=-((event.clientY-rect.top)/rect.height)*2+1;
-  raycaster.setFromCamera(pointer,camera);const position=raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(2));selectedObject.position.copy(position);selectedObject.visible=true;
-  document.querySelector('#status-text').textContent='Objet placé · glissez pour tourner la vue, utilisez la molette pour zoomer.';
+  if(!selectedObject||selectedObject.visible)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((event.clientX-rect.left)/rect.width)*2-1;pointer.y=-((event.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(pointer,camera);const position=raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(2));selectedObject.position.copy(position);selectedObject.visible=true;transformControls.attach(selectedObject);transformHelper.visible=true;
+  document.querySelector('#status-text').textContent='Objet placé · utilisez le gizmo central pour le déplacer ou le tourner.';
 }
 
 export function openModelPicker(){modelInput?.click();}
@@ -84,8 +86,10 @@ export function addSampleChair(){
 }
 
 function removeSelectedObject(){
-  if(!selectedObject)return;scene?.remove(selectedObject);selectedObject.traverse?.(node=>{node.geometry?.dispose?.();if(Array.isArray(node.material))node.material.forEach(m=>m.dispose?.());else node.material?.dispose?.();});selectedObject=null;
+  if(!selectedObject)return;transformControls?.detach();if(transformHelper)transformHelper.visible=false;scene?.remove(selectedObject);selectedObject.traverse?.(node=>{node.geometry?.dispose?.();if(Array.isArray(node.material))node.material.forEach(m=>m.dispose?.());else node.material?.dispose?.();});selectedObject=null;
 }
+
+export function setTransformMode(mode){if(mode!=='translate'&&mode!=='rotate')return;transformControls?.setMode(mode);if(transformHelper&&selectedObject?.visible)transformHelper.visible=true;}
 
 async function loop(confidence) {
   if(!running)return; const now=performance.now(); frames++; if(now-fpsSince>1000){document.querySelector('#fps-badge').textContent=`${frames} FPS`;frames=0;fpsSince=now;}
@@ -116,4 +120,4 @@ function drawDetections(boxes,video){
 }
 function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
 export function setDetectionEnabled(value){detectionEnabled=value;if(!value){const c=document.querySelector('#detection-layer');c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}
-export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
+export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
