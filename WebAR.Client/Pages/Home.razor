@@ -14,7 +14,7 @@
     <aside class="control-panel @(_controlsCollapsed ? "collapsed" : "")">
         <div class="panel-toolbar">
             <nav class="mode-tabs control-tabs" aria-label="Fonctionnalités">
-                <button class="@(_activeControlTab == "ai" ? "active" : "")" @onclick='() => SelectControlTab("ai")'>IA</button>
+                <button class="@(_activeControlTab == "ai" ? "active" : "")" @onclick='() => SelectControlTab("ai")'>Reconnaissance d’objets</button>
                 <button class="@(_activeControlTab == "3d" ? "active" : "")" @onclick='() => SelectControlTab("3d")'>Objets 3D</button>
                 <button class="@(_activeControlTab == "gps" ? "active" : "")" @onclick='() => SelectControlTab("gps")'>GPS</button>
                 <NavLink href="/scan-3d">Scan 3D</NavLink>
@@ -26,7 +26,7 @@
             <div class="actions vision-start-action"><button class="primary" onpointerdown="globalThis.requestWebARSensorPermission?.()" @onclick="StartAsync" disabled="@_started">@(_started ? "Vision active" : "Démarrer la vision")</button></div>
             @if (_activeControlTab == "ai")
             {
-                <div class="actions"><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button @onclick="OpenFaceEnrollmentAsync" disabled="@(!_started)">Enregistrer un visage</button><button id="spatial-tracking-button" disabled="@(!_started)">Suivi spatial actif</button></div>
+                <div class="actions"><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause détection" : "Activer détection")</button><button @onclick="OpenFaceEnrollmentAsync" disabled="@(!_started)">Enregistrer un visage</button><button id="spatial-tracking-button" disabled="@(!_started)">Suivi spatial actif</button></div>
                 <small>Détection YOLO11n et reconnaissance faciale locale.</small>
             }
             else if (_activeControlTab == "3d")
