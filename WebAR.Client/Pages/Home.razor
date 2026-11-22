@@ -59,6 +59,6 @@
     private async Task AddSampleChairAsync() { if (_module is null) return; _detecting = false; await _module.InvokeVoidAsync("setDetectionEnabled", false); await _module.InvokeVoidAsync("addSampleChair"); }
     private async Task SetTransformModeAsync(string mode) { _transformMode = mode; if (_module is not null) await _module.InvokeVoidAsync("setTransformMode", mode); }
     private void ToggleControls() => _controlsCollapsed = !_controlsCollapsed;
-    private void SelectControlTab(string tab) { _activeControlTab = tab; _controlsCollapsed = false; }
+    private async Task SelectControlTab(string tab) { _activeControlTab = tab; _controlsCollapsed = false; if (tab == "gps" && _detecting && _module is not null) { _detecting = false; await _module.InvokeVoidAsync("setDetectionEnabled", false); } }
     public async ValueTask DisposeAsync() { if (_module is null) return; await _module.InvokeVoidAsync("stop"); await _module.DisposeAsync(); }
 }
