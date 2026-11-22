@@ -30,5 +30,5 @@
     private async Task ReconstructAsync() { if (_module is not null) await _module.InvokeVoidAsync("startReconstruction", Configuration["WebARApiBaseUrl"] ?? "http://localhost:5258"); }
     private async Task ExportAsync() { if (_module is not null) await _module.InvokeVoidAsync("exportCaptures"); }
     private async Task ResetAsync() { if (_module is null) return; await _module.InvokeVoidAsync("reset"); _photoCount = 0; }
-    public async ValueTask DisposeAsync() { if (_module is null) return; await _module.InvokeVoidAsync("stop"); await _module.DisposeAsync(); }
+    public async ValueTask DisposeAsync() { if (_module is null) return; try { await _module.InvokeVoidAsync("stop"); await _module.DisposeAsync(); } catch (JSDisconnectedException) { } catch (ObjectDisposedException) { } }
 }

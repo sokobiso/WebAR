@@ -25,7 +25,10 @@ services:
       WebARApiBaseUrl: http://localhost:8081
     ports:
       - "8080:8080"
+    volumes:
+      - client-data-protection:/home/app/.aspnet/DataProtection-Keys
     restart: unless-stopped
 
 volumes:
   reconstruction-data:
+  client-data-protection:
