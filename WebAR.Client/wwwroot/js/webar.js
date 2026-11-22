@@ -11,10 +11,12 @@ let selectedObject, modelInput, selectedObjectKind;
 let orientationTracking = false, orientationHandler, orientationCalibration, sensorPermissionGranted = false;
 const discoveredCategories = new Map(), excludedCategories = new Set();
 let navigationMap, userMarker, destinationMarker, routeLine, locationWatchId, currentLocation, destination, routeSteps = [], navigationStepIndex = 0, deviceHeading = 0;
+let faceHuman, faceEnabled=false, faceLoading, lastFaceInference=0, knownFaces=[];
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const inputSize = 640;
 const chairTransformStorageKey = 'webar.sample-chair.transform.v1';
 const excludedCategoriesStorageKey = 'webar.excluded-categories.v1';
+const knownFacesStorageKey = 'webar.known-faces.v1';
 const labels = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','couch','potted plant','bed','dining table','toilet','tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'];
 
 globalThis.requestWebARSensorPermission=async()=>{
@@ -60,6 +62,10 @@ function initThree() {
   document.querySelector('#spatial-tracking-button')?.addEventListener('click',enableOrientationTracking);
   initCategoryPanel();
   document.querySelector('#navigation-close')?.addEventListener('click',hideNavigationMap);
+  document.querySelector('#face-panel-close')?.addEventListener('click',closeFaceEnrollment);
+  document.querySelector('#face-reference')?.addEventListener('change',onFaceReferenceChange);
+  document.querySelector('#face-clear')?.addEventListener('click',clearKnownFaces);
+  loadKnownFaces();if(knownFaces.length)ensureFaceRecognition();
   createModelInput();
   if(navigator.xr) document.body.appendChild(ARButton.createButton(renderer,{optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}})); addEventListener('resize',resize);
 }
@@ -122,6 +128,30 @@ function removeSelectedObject(){
 }
 
 export function setTransformMode(mode){if(mode!=='translate'&&mode!=='rotate')return;transformControls?.setMode(mode);if(transformHelper&&selectedObject?.visible)transformHelper.visible=true;}
+
+export function openFaceEnrollment(){document.querySelector('#face-panel').hidden=false;ensureFaceRecognition();}
+function closeFaceEnrollment(){document.querySelector('#face-panel').hidden=true;}
+function loadKnownFaces(){try{const saved=JSON.parse(localStorage.getItem(knownFacesStorageKey));knownFaces=Array.isArray(saved)?saved.filter(item=>item?.name&&Array.isArray(item.embedding)):[];}catch(error){knownFaces=[];console.warn('Lecture des visages enregistrés:',error);}}
+
+async function ensureFaceRecognition(){
+  if(faceHuman){faceEnabled=true;return faceHuman;}if(faceLoading)return faceLoading;const status=document.querySelector('#face-status');
+  faceLoading=(async()=>{try{const HumanClass=globalThis.Human?.Human;if(!HumanClass)throw new Error('bibliothèque Human indisponible');status.textContent='Chargement du modèle de reconnaissance faciale…';faceHuman=new HumanClass({backend:'webgl',modelBasePath:'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',face:{enabled:true,detector:{rotation:true,maxDetected:8},mesh:{enabled:true},description:{enabled:true},iris:{enabled:false},emotion:{enabled:false}},body:{enabled:false},hand:{enabled:false},object:{enabled:false},gesture:{enabled:false}});await faceHuman.load();await faceHuman.warmup();faceEnabled=true;status.textContent=knownFaces.length?knownFaces.length+' visage(s) enregistré(s) localement.':'Choisissez une photo nette et frontale.';return faceHuman;}catch(error){console.error('Reconnaissance faciale:',error);status.textContent='Reconnaissance faciale indisponible ('+error.message+').';throw error;}finally{faceLoading=null;}})();return faceLoading;
+}
+
+async function onFaceReferenceChange(event){
+  const file=event.target.files?.[0],status=document.querySelector('#face-status'),name=document.querySelector('#face-name')?.value?.trim();if(!file||!name)return;
+  try{const human=await ensureFaceRecognition(),url=URL.createObjectURL(file),image=new Image();image.src=url;await image.decode();const result=await human.detect(image);URL.revokeObjectURL(url);const face=result.face?.[0];if(!face?.embedding)throw new Error('aucun visage exploitable trouvé');knownFaces=knownFaces.filter(item=>item.name!==name);knownFaces.push({name,embedding:Array.from(face.embedding)});localStorage.setItem(knownFacesStorageKey,JSON.stringify(knownFaces));status.textContent=name+' est enregistré localement. La reconnaissance est active.';event.target.value='';}
+  catch(error){console.error('Enregistrement du visage:',error);status.textContent='Impossible d’enregistrer ce visage ('+error.message+').';}
+}
+
+function clearKnownFaces(){knownFaces=[];localStorage.removeItem(knownFacesStorageKey);document.querySelector('#face-status').textContent='Tous les visages enregistrés ont été effacés.';const canvas=document.querySelector('#face-layer');canvas?.getContext('2d')?.clearRect(0,0,canvas.width,canvas.height);}
+async function detectFaces(){const video=document.querySelector('#camera-feed');if(!faceHuman||video.readyState<2)return;const result=await faceHuman.detect(video);drawFaces(result.face??[],video);}
+
+function drawFaces(faces,video){
+  const canvas=document.querySelector('#face-layer'),ctx=canvas.getContext('2d'),dpr=Math.min(devicePixelRatio||1,2),displayW=Math.round(canvas.clientWidth*dpr),displayH=Math.round(canvas.clientHeight*dpr);if(canvas.width!==displayW||canvas.height!==displayH){canvas.width=displayW;canvas.height=displayH;}ctx.clearRect(0,0,displayW,displayH);
+  const coverScale=Math.max(displayW/video.videoWidth,displayH/video.videoHeight),renderedW=video.videoWidth*coverScale,renderedH=video.videoHeight*coverScale,offsetX=(displayW-renderedW)/2,offsetY=(displayH-renderedH)/2;ctx.font='bold '+Math.round(15*dpr)+'px system-ui';ctx.lineWidth=Math.max(3,3*dpr);
+  for(const face of faces){if(!face.box)continue;let match=null;if(face.embedding&&knownFaces.length){for(const known of knownFaces){const similarity=faceHuman.match.similarity(face.embedding,known.embedding);if(!match||similarity>match.similarity)match={name:known.name,similarity};}}const recognized=match?.similarity>=.55,label=recognized?match.name+' '+Math.round(match.similarity*100)+'%':'Visage inconnu';const [sourceX,sourceY,sourceW,sourceH]=face.box,w=sourceW*coverScale,h=sourceH*coverScale,unmirroredX=sourceX*coverScale+offsetX,x=mirrorVideo?displayW-(unmirroredX+w):unmirroredX,y=sourceY*coverScale+offsetY,color=recognized?'#39e58c':'#ffb84d';ctx.strokeStyle=color;ctx.strokeRect(x,y,w,h);const padding=6*dpr,labelH=25*dpr,tw=ctx.measureText(label).width+padding*2,labelX=Math.max(0,Math.min(x,displayW-tw)),labelY=Math.max(0,y-labelH);ctx.fillStyle=color;ctx.fillRect(labelX,labelY,tw,labelH);ctx.fillStyle='#03110e';ctx.fillText(label,labelX+padding,labelY+18*dpr);}
+}
 
 async function enableOrientationTracking(automatic=false){
   const status=document.querySelector('#status-text'),button=document.querySelector('#spatial-tracking-button');
@@ -201,6 +231,7 @@ function stopNavigation(){hideNavigationMap();document.querySelector('#navigatio
 async function loop(confidence) {
   if(!running)return; const now=performance.now(); frames++; if(now-fpsSince>1000){document.querySelector('#fps-badge').textContent=`${frames} FPS`;frames=0;fpsSince=now;}
   if(session&&detectionEnabled&&now-lastInference>180){lastInference=now;try{await detect(confidence);}catch(error){console.error('Inference YOLO:',error);}}
+  if(faceEnabled&&detectionEnabled&&now-lastFaceInference>450){lastFaceInference=now;try{await detectFaces();}catch(error){console.error('Détection faciale:',error);}}
   rafId=requestAnimationFrame(()=>loop(confidence));
 }
 
@@ -257,5 +288,5 @@ function excludeAllCategories(){for(const name of discoveredCategories.keys())ex
 function saveCategoryFilters(){try{localStorage.setItem(excludedCategoriesStorageKey,JSON.stringify([...excludedCategories]));}catch(error){console.warn('Sauvegarde des catégories exclues:',error);}}
 function toggleCategoryPanel(){const panel=document.querySelector('#category-panel'),mobile=matchMedia('(max-width: 560px)').matches;if(mobile){const expanded=panel?.classList.toggle('expanded-mobile');panel?.classList.toggle('collapsed',!expanded);}else panel?.classList.toggle('collapsed');const expanded=mobile?panel?.classList.contains('expanded-mobile'):!panel?.classList.contains('collapsed');document.querySelector('#category-panel-toggle')?.setAttribute('aria-expanded',String(expanded));}
 function resize(){if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
-export function setDetectionEnabled(value){detectionEnabled=value;if(!value){const c=document.querySelector('#detection-layer');c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}
-export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);stopNavigation();renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);document.querySelector('#spatial-tracking-button')?.removeEventListener('click',enableOrientationTracking);document.querySelector('#navigation-close')?.removeEventListener('click',hideNavigationMap);document.querySelector('#category-list')?.removeEventListener('change',onCategoryFilterChange);document.querySelector('#keep-all-categories')?.removeEventListener('click',keepAllCategories);document.querySelector('#exclude-all-categories')?.removeEventListener('click',excludeAllCategories);document.querySelector('#category-panel-toggle')?.removeEventListener('click',toggleCategoryPanel);if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);orientationHandler=null;orientationTracking=false;transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
+export function setDetectionEnabled(value){detectionEnabled=value;if(!value){for(const id of ['detection-layer','face-layer']){const c=document.querySelector('#'+id);c?.getContext('2d')?.clearRect(0,0,c.width,c.height);}}}
+export function stop(){running=false;cancelAnimationFrame(rafId);cancelAnimationFrame(cameraRafId);stopNavigation();renderer?.domElement.removeEventListener('pointerdown',placeSelectedObject);document.querySelector('#spatial-tracking-button')?.removeEventListener('click',enableOrientationTracking);document.querySelector('#navigation-close')?.removeEventListener('click',hideNavigationMap);document.querySelector('#face-panel-close')?.removeEventListener('click',closeFaceEnrollment);document.querySelector('#face-reference')?.removeEventListener('change',onFaceReferenceChange);document.querySelector('#face-clear')?.removeEventListener('click',clearKnownFaces);document.querySelector('#category-list')?.removeEventListener('change',onCategoryFilterChange);document.querySelector('#keep-all-categories')?.removeEventListener('click',keepAllCategories);document.querySelector('#exclude-all-categories')?.removeEventListener('click',excludeAllCategories);document.querySelector('#category-panel-toggle')?.removeEventListener('click',toggleCategoryPanel);if(orientationHandler)removeEventListener('deviceorientation',orientationHandler,true);orientationHandler=null;orientationTracking=false;transformControls?.detach();transformControls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();controls?.dispose();stream?.getTracks().forEach(t=>t.stop());stream=null;removeEventListener('resize',resize);modelInput?.remove();document.querySelector('#ARButton')?.remove();}
