@@ -1,0 +1,31 @@
+@page "/scan-3d"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<PageTitle>Scan 3D · WebAR Vision</PageTitle>
+<main class="scan-shell"><section class="scan-stage">
+    <video id="scan-camera" autoplay muted playsinline></video>
+    <div class="scan-guide"><div class="scan-target"></div><strong id="scan-guidance">Placez l’objet au centre</strong></div>
+    <header class="scan-header"><span class="eyebrow">CAPTURE 3D</span><h1>Photographiez tout autour de l’objet.</h1></header>
+    <aside class="scan-panel">
+        <nav class="mode-tabs" aria-label="Modes"><NavLink href="/" Match="NavLinkMatch.All">Vision AR</NavLink><NavLink href="/scan-3d">Scan 3D</NavLink></nav>
+        <div class="scan-progress"><span>Photos capturées</span><strong>@_photoCount / 36</strong></div>
+        <div class="scan-progress-track"><span style="width:@($"{Math.Min(100, _photoCount / 36d * 100):0}%")"></span></div>
+        <p id="scan-status">Prenez des photos nettes en tournant progressivement autour de l’objet.</p>
+        <div class="scan-actions"><button class="primary" @onclick="StartAsync" disabled="@_started">@(_started ? "Caméra active" : "Démarrer le scan")</button><button @onclick="CaptureAsync" disabled="@(!_started)">Prendre une photo</button><button @onclick="ResetAsync" disabled="@(_photoCount == 0)">Recommencer</button></div>
+        <div id="scan-thumbnails" class="scan-thumbnails"></div>
+        <small>À partir de 24 à 36 vues, les images pourront être envoyées au service de reconstruction pour produire un fichier GLB.</small>
+    </aside>
+</section></main>
+
+@code {
+    private IJSObjectReference? _module;
+    private bool _started;
+    private int _photoCount;
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/scan3d.js"); }
+    private async Task StartAsync() { if (_module is null) return; await _module.InvokeVoidAsync("start"); _started = true; }
+    private async Task CaptureAsync() { if (_module is null) return; _photoCount = await _module.InvokeAsync<int>("capture"); }
+    private async Task ResetAsync() { if (_module is null) return; await _module.InvokeVoidAsync("reset"); _photoCount = 0; }
+    public async ValueTask DisposeAsync() { if (_module is null) return; await _module.InvokeVoidAsync("stop"); await _module.DisposeAsync(); }
+}
