@@ -11,7 +11,35 @@
     <aside id="navigation-panel" class="navigation-panel"><div class="navigation-header"><strong>Navigation GPS</strong><button id="navigation-close" type="button" aria-label="Fermer">×</button></div><p id="navigation-help">Touchez la carte pour choisir votre destination.</p><div id="navigation-map"></div></aside>
     <aside id="category-panel" class="category-panel collapsed" hidden="@(!_started || !_detecting)"><button id="category-panel-toggle" class="category-panel-toggle" type="button" aria-expanded="false">Objets détectés <span>›</span></button><div class="category-panel-body"><div id="category-list" class="category-list"><p class="category-empty">Aucun objet détecté</p></div><div class="category-actions"><button id="keep-all-categories" type="button">Tout garder</button><button id="exclude-all-categories" type="button">Tout exclure</button></div></div></aside>
     <aside id="face-panel" class="face-panel" hidden><div class="face-panel-header"><strong>Enregistrer un visage</strong><button id="face-panel-close" type="button">×</button></div><label>Nom<input id="face-name" value="Mourad" maxlength="60" /></label><label>Photo de référence<input id="face-reference" type="file" accept="image/*" /></label><p id="face-status">La photo et l’empreinte faciale restent dans ce navigateur.</p><button id="face-clear" type="button">Effacer les visages enregistrés</button></aside>
-    <aside class="control-panel @(_controlsCollapsed ? "collapsed" : "")"><div class="panel-toolbar"><nav class="mode-tabs" aria-label="Modes"><NavLink href="/" Match="NavLinkMatch.All">Vision AR</NavLink><NavLink href="/scan-3d">Scan 3D</NavLink></nav><button class="panel-collapse" @onclick="ToggleControls" aria-expanded="@(!_controlsCollapsed)" aria-label="@(_controlsCollapsed ? "Afficher les commandes" : "Réduire les commandes")">@(_controlsCollapsed ? "+" : "−")</button></div><div class="panel-content"><p id="status-text">Démarrez la caméra pour lancer l’expérience.</p><div class="actions"><button class="primary" onpointerdown="globalThis.requestWebARSensorPermission?.()" @onclick="StartAsync" disabled="@_started">@(_started ? "Vision active" : "Démarrer la vision")</button><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button @onclick="OpenFaceEnrollmentAsync" disabled="@(!_started)">Enregistrer un visage</button><button id="spatial-tracking-button" disabled="@(!_started)">Suivi spatial actif</button><button @onclick="StartNavigationAsync" disabled="@(!_started)">Navigation GPS</button><button @onclick="AddSampleChairAsync" disabled="@(!_started)">Chaise exemple</button><button @onclick="ChooseModelAsync" disabled="@(!_started)">Importer GLB/GLTF</button><button class="tool-button @(_transformMode == "translate" ? "active" : "")" @onclick='() => SetTransformModeAsync("translate")' disabled="@(!_started)">Déplacer</button><button class="tool-button @(_transformMode == "rotate" ? "active" : "")" @onclick='() => SetTransformModeAsync("rotate")' disabled="@(!_started)">Tourner</button></div><small>Le suivi spatial démarre avec la vision. Placez l’objet, puis utilisez les flèches ou les anneaux affichés en son centre.</small></div></aside>
+    <aside class="control-panel @(_controlsCollapsed ? "collapsed" : "")">
+        <div class="panel-toolbar">
+            <nav class="mode-tabs control-tabs" aria-label="Fonctionnalités">
+                <button class="@(_activeControlTab == "ai" ? "active" : "")" @onclick='() => SelectControlTab("ai")'>IA</button>
+                <button class="@(_activeControlTab == "3d" ? "active" : "")" @onclick='() => SelectControlTab("3d")'>Objets 3D</button>
+                <button class="@(_activeControlTab == "gps" ? "active" : "")" @onclick='() => SelectControlTab("gps")'>GPS</button>
+                <NavLink href="/scan-3d">Scan 3D</NavLink>
+            </nav>
+            <button class="panel-collapse" @onclick="ToggleControls" aria-expanded="@(!_controlsCollapsed)" aria-label="@(_controlsCollapsed ? "Afficher les commandes" : "Réduire les commandes")">@(_controlsCollapsed ? "+" : "−")</button>
+        </div>
+        <div class="panel-content">
+            <p id="status-text">Démarrez la caméra pour lancer l’expérience.</p>
+            @if (_activeControlTab == "ai")
+            {
+                <div class="actions"><button class="primary" onpointerdown="globalThis.requestWebARSensorPermission?.()" @onclick="StartAsync" disabled="@_started">@(_started ? "Vision active" : "Démarrer la vision")</button><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button @onclick="OpenFaceEnrollmentAsync" disabled="@(!_started)">Enregistrer un visage</button><button id="spatial-tracking-button" disabled="@(!_started)">Suivi spatial actif</button></div>
+                <small>Détection YOLO11n et reconnaissance faciale locale.</small>
+            }
+            else if (_activeControlTab == "3d")
+            {
+                <div class="actions"><button @onclick="AddSampleChairAsync" disabled="@(!_started)">Chaise exemple</button><button @onclick="ChooseModelAsync" disabled="@(!_started)">Importer GLB/GLTF</button><button class="tool-button @(_transformMode == "translate" ? "active" : "")" @onclick='() => SetTransformModeAsync("translate")' disabled="@(!_started)">Déplacer</button><button class="tool-button @(_transformMode == "rotate" ? "active" : "")" @onclick='() => SetTransformModeAsync("rotate")' disabled="@(!_started)">Tourner</button></div>
+                <small>Ajoutez un objet, puis utilisez les flèches ou les anneaux affichés en son centre.</small>
+            }
+            else
+            {
+                <div class="actions"><button class="primary" @onclick="StartNavigationAsync" disabled="@(!_started)">Ouvrir la navigation GPS</button></div>
+                <small>Choisissez une destination sur OpenStreetMap et suivez les indications dans la caméra.</small>
+            }
+        </div>
+    </aside>
 </section></main>
 
 @code {
@@ -19,6 +47,7 @@
     private bool _started;
     private bool _detecting;
     private bool _controlsCollapsed;
+    private string _activeControlTab = "ai";
     private string _transformMode = "translate";
     protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/webar.js"); }
     private async Task StartAsync() { _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/webar.js"); await _module.InvokeVoidAsync("start", new { modelUrl = "models/yolo11n.onnx", confidence = 0.45 }); _started = true; _detecting = true; }
@@ -29,5 +58,6 @@
     private async Task AddSampleChairAsync() { if (_module is null) return; _detecting = false; await _module.InvokeVoidAsync("setDetectionEnabled", false); await _module.InvokeVoidAsync("addSampleChair"); }
     private async Task SetTransformModeAsync(string mode) { _transformMode = mode; if (_module is not null) await _module.InvokeVoidAsync("setTransformMode", mode); }
     private void ToggleControls() => _controlsCollapsed = !_controlsCollapsed;
+    private void SelectControlTab(string tab) { _activeControlTab = tab; _controlsCollapsed = false; }
     public async ValueTask DisposeAsync() { if (_module is null) return; await _module.InvokeVoidAsync("stop"); await _module.DisposeAsync(); }
 }
