@@ -13,6 +13,10 @@
 # Source training weights (the exported ONNX model is versioned)
 *.pt
 
+# Local 3D reconstruction inputs and generated models
+WebAR.API/reconstruction-data/
+tools/meshroom-worker/jobs/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

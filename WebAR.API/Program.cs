@@ -3,8 +3,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options => options.MultipartBodyLengthLimit = 250_000_000);
+builder.Services.AddSingleton<WebAR.API.Services.ReconstructionStore>();
 builder.Services.AddCors(options => options.AddPolicy("Client", policy => policy
-    .WithOrigins("http://localhost:5202", "http://localhost:8080")
+    .AllowAnyOrigin()
     .AllowAnyHeader()
     .AllowAnyMethod()));
 

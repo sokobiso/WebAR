@@ -7,8 +7,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
+      Reconstruction__WorkerKey: ${RECONSTRUCTION_WORKER_KEY:-local-development-key}
     ports:
       - "8081:8080"
+    volumes:
+      - reconstruction-data:/app/reconstruction-data
     restart: unless-stopped
 
   webar-client:
@@ -18,6 +21,11 @@ services:
       dockerfile: WebAR.Client/Dockerfile
     depends_on:
       - webar-api
+    environment:
+      WebARApiBaseUrl: http://localhost:8081
     ports:
       - "8080:8080"
     restart: unless-stopped
+
+volumes:
+  reconstruction-data:
