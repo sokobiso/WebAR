@@ -23,9 +23,10 @@
         </div>
         <div class="panel-content">
             <p id="status-text">Démarrez la caméra pour lancer l’expérience.</p>
+            <div class="actions vision-start-action"><button class="primary" onpointerdown="globalThis.requestWebARSensorPermission?.()" @onclick="StartAsync" disabled="@_started">@(_started ? "Vision active" : "Démarrer la vision")</button></div>
             @if (_activeControlTab == "ai")
             {
-                <div class="actions"><button class="primary" onpointerdown="globalThis.requestWebARSensorPermission?.()" @onclick="StartAsync" disabled="@_started">@(_started ? "Vision active" : "Démarrer la vision")</button><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button @onclick="OpenFaceEnrollmentAsync" disabled="@(!_started)">Enregistrer un visage</button><button id="spatial-tracking-button" disabled="@(!_started)">Suivi spatial actif</button></div>
+                <div class="actions"><button @onclick="ToggleDetectionAsync" disabled="@(!_started)">@(_detecting ? "Pause IA" : "Activer IA")</button><button @onclick="OpenFaceEnrollmentAsync" disabled="@(!_started)">Enregistrer un visage</button><button id="spatial-tracking-button" disabled="@(!_started)">Suivi spatial actif</button></div>
                 <small>Détection YOLO11n et reconnaissance faciale locale.</small>
             }
             else if (_activeControlTab == "3d")

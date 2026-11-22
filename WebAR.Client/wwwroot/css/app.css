@@ -12,6 +12,8 @@
 .panel-toolbar .mode-tabs { flex: 1; margin-bottom: 0; }
 .panel-collapse { flex: 0 0 2.4rem; width: 2.4rem; height: 2.4rem; padding: 0; color: #8ff7df; border: 1px solid #48e5c266; border-radius: 50%; background: #17232e; font-size: 1.35rem; font-weight: 800; cursor: pointer; }
 .panel-content { margin-top: .75rem; }
+.vision-start-action { margin-bottom: .55rem; }
+.vision-start-action button { flex-basis: 100%; }
 .actions { display: flex; flex-wrap: wrap; gap: .6rem; } .actions button { flex: 1 1 150px; min-height: 44px; padding: .7rem 1rem; color: #fff; border: 1px solid #ffffff2e; border-radius: .8rem; background: #17232e; cursor: pointer; } .actions button.primary { color: #03110e; border-color: #48e5c2; background: #48e5c2; font-weight: 800; } .actions button:disabled { opacity: .45; cursor: not-allowed; }
 .actions button.tool-button.active { color: #03110e; border-color: #ffd166; background: #ffd166; font-weight: 800; }
 .mode-tabs { display: flex; gap: .35rem; margin-bottom: .75rem; padding: .25rem; border-radius: .75rem; background: #02070c99; }
