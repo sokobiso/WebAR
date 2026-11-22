@@ -52,7 +52,7 @@
     private string _transformMode = "translate";
     protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/webar.js"); }
     private async Task ToggleVisionAsync() { if (_started) await StopVisionAsync(); else await StartVisionAsync(); }
-    private async Task StartVisionAsync() { _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/webar.js"); var recognitionEnabled = _activeControlTab == "ai"; await _module.InvokeVoidAsync("start", new { modelUrl = "models/yolo11n.onnx", confidence = 0.45, detectionEnabled = recognitionEnabled }); _started = true; _detecting = recognitionEnabled; }
+    private async Task StartVisionAsync() { _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/webar.js"); var recognitionEnabled = _activeControlTab == "ai"; _started = await _module.InvokeAsync<bool>("start", new { modelUrl = "models/yolo11n.onnx", confidence = 0.45, detectionEnabled = recognitionEnabled }); _detecting = _started && recognitionEnabled; }
     private async Task StopVisionAsync() { if (_module is not null) await _module.InvokeVoidAsync("stop"); _started = false; _detecting = false; }
     private async Task ToggleDetectionAsync() { if (_module is null) return; _detecting = !_detecting; if (_detecting) await _module.InvokeVoidAsync("removeSampleChair"); await _module.InvokeVoidAsync("setDetectionEnabled", _detecting); }
     private async Task ChooseModelAsync() { if (_module is not null) await _module.InvokeVoidAsync("openModelPicker"); }

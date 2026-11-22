@@ -25,7 +25,7 @@ globalThis.requestWebARSensorPermission=async()=>{
 };
 
 export async function start(options) {
-  if (running) return;
+  if (running) return true;
   detectionEnabled=options.detectionEnabled??true;session=null;
   const video = document.querySelector('#camera-feed'), status = document.querySelector('#status-text');
   try {
@@ -33,13 +33,13 @@ export async function start(options) {
     video.muted=true;video.autoplay=true;video.playsInline=true;video.setAttribute('playsinline','');video.srcObject=stream;await video.play();
     const facingMode=stream.getVideoTracks()[0]?.getSettings?.().facingMode;mirrorVideo=facingMode==='user';video.classList.toggle('mirrored',mirrorVideo);
     useCanvasCamera=/iPhone|iPad|iPod/i.test(navigator.userAgent);video.classList.toggle('canvas-fallback',useCanvasCamera);document.querySelector('#camera-layer').classList.toggle('active',useCanvasCamera);if(useCanvasCamera)renderCameraFrame();initThree();await enableOrientationTracking(true);
-    if(detectionEnabled){status.textContent = 'Caméra active · chargement du modèle YOLO11n…';if (!globalThis.ort) throw new Error('ONNX Runtime Web indisponible');ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/';session = await ort.InferenceSession.create(options.modelUrl, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });status.textContent = 'YOLO11n actif · traitement local dans votre navigateur.';}
-    else status.textContent='Caméra active · reconnaissance désactivée dans cet onglet.';
   } catch (error) {
-    console.warn(error); status.textContent = error.name === 'NotAllowedError' ? 'Accès caméra refusé. Autorisez la caméra puis réessayez.' : `Mode 3D actif · IA indisponible (${error.message}). Ajoutez models/yolo11n.onnx.`;
-    if (!renderer) initThree();
+    console.warn(error);status.textContent=error.name==='NotAllowedError'?'Accès caméra refusé. Autorisez la caméra puis réessayez.':'Caméra indisponible ('+error.message+').';stream?.getTracks().forEach(track=>track.stop());stream=null;video.srcObject=null;return false;
   }
+  try{if(detectionEnabled){status.textContent='Caméra active · chargement du modèle YOLO11n…';if(!globalThis.ort)throw new Error('ONNX Runtime Web indisponible');ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/';session=await ort.InferenceSession.create(options.modelUrl,{executionProviders:['wasm'],graphOptimizationLevel:'all'});status.textContent='YOLO11n actif · traitement local dans votre navigateur.';}else status.textContent='Caméra active · reconnaissance désactivée dans cet onglet.';}
+  catch(error){console.warn(error);status.textContent='Caméra active · reconnaissance indisponible ('+error.message+').';session=null;}
   running = true; loop(options.confidence ?? 0.45);
+  return true;
 }
 
 function renderCameraFrame(now=performance.now()){

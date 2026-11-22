@@ -11,5 +11,9 @@ WORKDIR /app
 ENV ASPNETCORE_URLS=http://+:8080 ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080
 COPY --from=build /app/publish .
+# Prepare the persistent ASP.NET Core Data Protection key directory before
+# dropping privileges. Docker copies this ownership into a newly created volume.
+RUN mkdir -p /home/app/.aspnet/DataProtection-Keys \
+    && chown -R $APP_UID:$APP_UID /home/app/.aspnet
 USER $APP_UID
 ENTRYPOINT ["dotnet", "WebAR.Client.dll"]
